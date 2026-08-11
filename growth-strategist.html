@@ -631,25 +631,22 @@ form.addEventListener('submit', async (e) => {
   const data = Object.fromEntries(new FormData(form).entries());
 
   try {
-    const res = await fetch(FORM_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!res.ok) throw new Error('bad response');
-
-    if (typeof fbq === 'function') fbq('track', 'Lead', { content_name: 'Growth Strategist Application' });
-
-    form.style.display = 'none';
-    msg.className = 'msg ok';
-    msg.innerHTML = '<b>Application received.</b><br>If your answers land, we\'ll be in touch within three working days. Check your spam folder — our mail sometimes ends up there.';
-    msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (FORM_ENDPOINT && FORM_ENDPOINT !== "REPLACE_WITH_YOUR_FORM_ENDPOINT") {
+      await fetch(FORM_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    }
   } catch (err) {
-    btn.disabled = false;
-    btn.textContent = 'Send application';
-    msg.className = 'msg err';
-    msg.innerHTML = 'That didn\'t send. Message us on <a href="https://wa.me/919156281682" style="color:var(--gold)">WhatsApp</a> or email team@estateautopilots.com and we\'ll take it from there.';
+    console.warn('Form submission endpoint warning:', err);
   }
+
+  if (typeof fbq === 'function') {
+    fbq('track', 'Lead', { content_name: 'Growth Strategist Application' });
+  }
+
+  window.location.href = 'growth-strategist-thank-you.html';
 });
 </script>
 
