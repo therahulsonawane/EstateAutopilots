@@ -517,7 +517,8 @@ footer{border-top:1px solid var(--hair);padding:clamp(44px,6vw,72px) 0 40px;font
       <p class="task-note">Set the Doc to <b>anyone with the link can view</b>, then paste the link in the form below. If the link isn't accessible we can't review it, and we won't chase.</p>
     </div>
 
-    <form id="applyForm" novalidate>
+    <form id="applyForm" name="growth-strategist-application" method="POST" data-netlify="true" netlify action="growth-strategist-thank-you.html" novalidate>
+      <input type="hidden" name="form-name" value="growth-strategist-application">
       <div class="row2">
         <div class="field"><label for="name">Full name</label><input type="text" id="name" name="name" required autocomplete="name"></div>
         <div class="field"><label for="phone">Phone / WhatsApp</label><input type="tel" id="phone" name="phone" required autocomplete="tel"></div>
@@ -651,15 +652,25 @@ form.addEventListener('submit', async (e) => {
   btn.textContent = 'Sending…';
 
   try {
-    if (FORM_ENDPOINT && FORM_ENDPOINT !== "REPLACE_WITH_YOUR_FORM_ENDPOINT") {
+    const formData = new FormData(form);
+
+    // 1. Submit to Netlify Forms
+    await fetch('/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(formData).toString()
+    });
+
+    // 2. Submit to secondary endpoint if configured
+    if (typeof FORM_ENDPOINT !== 'undefined' && FORM_ENDPOINT && FORM_ENDPOINT !== "REPLACE_WITH_YOUR_FORM_ENDPOINT") {
       await fetch(FORM_ENDPOINT, {
         method: 'POST',
-        body: new URLSearchParams(new FormData(form)),
+        body: new URLSearchParams(formData),
         mode: 'no-cors'
       });
     }
   } catch (err) {
-    console.warn('Form submission endpoint error:', err);
+    console.warn('Form submission error:', err);
   }
 
   if (typeof fbq === 'function') {

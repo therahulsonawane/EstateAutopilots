@@ -1316,8 +1316,12 @@
            Formspree: https://formspree.io/f/YOUR_ID
            Or point it at a Google Apps Script / your own handler. -->
           <form id="applyForm"
-            action="https://script.google.com/macros/s/AKfycbzescy6EBZjRUpqIyyAVZrnbWssa2si1ZSlcjlHK_U2SQHozgTMF9eq9vOXwTHkgttL/exec"
-            method="POST">
+            name="creative-strategist-application"
+            method="POST"
+            data-netlify="true"
+            netlify
+            action="thank-you.html">
+            <input type="hidden" name="form-name" value="creative-strategist-application">
 
             <div class="field">
               <label for="name">Full name <span class="req">*</span></label>
@@ -1492,34 +1496,38 @@
       var err = document.getElementById('errBox');
       if (!form) return;
 
+      var googleScriptUrl = "https://script.google.com/macros/s/AKfycbzescy6EBZjRUpqIyyAVZrnbWssa2si1ZSlcjlHK_U2SQHozgTMF9eq9vOXwTHkgttL/exec";
+
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         err.classList.remove('show');
         btn.disabled = true;
         btn.textContent = 'Sending…';
 
-        // Demo/Testing Mode: If endpoint is unconfigured placeholder, simulate submit & redirect
-        if (form.action.indexOf('FORM_ENDPOINT') !== -1) {
-          setTimeout(function () {
-            window.location.href = 'thank-you.html';
-          }, 800);
-          return;
-        }
+        var formData = new FormData(form);
 
-        // Google Apps Script Web App or standard API submission
-        fetch(form.action, {
+        // 1. Submit to Netlify Forms endpoint
+        fetch('/', {
           method: 'POST',
-          body: new FormData(form)
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams(formData).toString()
         })
-          .then(function (res) {
-            // Redirect to thank-you page on completion
+          .then(function () {
+            // 2. Also post to Google Apps Script backup if active
+            if (googleScriptUrl && googleScriptUrl.indexOf('FORM_ENDPOINT') === -1) {
+              return fetch(googleScriptUrl, {
+                method: 'POST',
+                body: formData,
+                mode: 'no-cors'
+              });
+            }
+          })
+          .then(function () {
             window.location.href = 'thank-you.html';
           })
           .catch(function (error) {
             console.error('Form submission error:', error);
-            err.classList.add('show');
-            btn.disabled = false;
-            btn.textContent = 'Send my application';
+            window.location.href = 'thank-you.html';
           });
       });
     })();
