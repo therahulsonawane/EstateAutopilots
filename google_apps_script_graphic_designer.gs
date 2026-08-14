@@ -1,18 +1,18 @@
 /**
- * Estate Autopilots — Growth Strategist Lead Automation
- * Google Apps Script for capturing form submissions into Google Sheets
+ * Estate Autopilots — Graphic Designer Lead Automation
+ * Google Apps Script for capturing Graphic Designer applications into a dedicated Google Sheet
  * 
  * Instructions:
- * 1. Open your target Google Sheet for Growth Strategist.
+ * 1. Open your dedicated Google Sheet for Graphic Designer applications.
  * 2. Click Extensions > Apps Script.
  * 3. Replace all code in Code.gs with this script.
  * 4. Click 'Deploy' > 'New deployment'.
  * 5. Select type: 'Web app'.
- * 6. Set Description: "Growth Strategist Lead Collector".
+ * 6. Set Description: "Graphic Designer Lead Collector".
  * 7. Set 'Execute as': "Me".
  * 8. Set 'Who has access': "Anyone".
  * 9. Click 'Deploy', authorize permissions, and copy the Web App URL.
- * 10. Paste the Web App URL into FORM_ENDPOINT in growth-strategist.html.
+ * 10. Paste the Web App URL into FORM_ENDPOINT in graphic-designer.html (around line 821).
  */
 
 function doPost(e) {
@@ -22,10 +22,10 @@ function doPost(e) {
 
   try {
     var doc = SpreadsheetApp.getActiveSpreadsheet();
-    // Target the 'Growth Strategist' tab if present, fallback to active sheet
-    var sheet = doc.getSheetByName("Growth Strategist") || doc.getActiveSheet();
+    // Uses the 'Graphic Designer' tab if it exists, otherwise writes to the active first tab
+    var sheet = doc.getSheetByName("Graphic Designer") || doc.getActiveSheet();
 
-    // Check if header row exists
+    // Check if header row exists, create if empty
     var lastRow = sheet.getLastRow();
     var lastCol = sheet.getLastColumn();
 
@@ -33,14 +33,19 @@ function doPost(e) {
       var headers = [
         "Timestamp",
         "Full Name",
-        "Phone / WhatsApp",
+        "WhatsApp Number",
         "Email",
+        "Design Qualification",
         "Years Experience",
+        "Portfolio Link",
+        "Task Submission Link",
         "Current Role & Company",
-        "Portfolio / CV Link",
-        "Task Doc Link",
-        "Q3 - Senior Feedback Response",
-        "Q4 - Anything Else",
+        "Notice Period",
+        "Daily Tools",
+        "Q1 - Design Restraint",
+        "Q2 - Weekly Creatives Volume",
+        "Current Salary (Monthly)",
+        "Expected Salary (Monthly)",
         "UTM Source",
         "UTM Campaign",
         "UTM Content",
@@ -48,24 +53,36 @@ function doPost(e) {
         "Page URL"
       ];
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#021f2d").setFontColor("#fbc701");
+      sheet.getRange(1, 1, 1, headers.length)
+        .setFontWeight("bold")
+        .setBackground("#021f2d")
+        .setFontColor("#fbc701");
       sheet.setFrozenRows(1);
     }
 
     var p = (e && e.parameter) ? e.parameter : {};
+    var params = (e && e.parameters) ? e.parameters : {};
     var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+05:30", "yyyy-MM-dd HH:mm:ss");
+
+    // Handle multiple tool selections if checkboxes are passed
+    var toolsSelected = params.tools ? (Array.isArray(params.tools) ? params.tools.join(', ') : params.tools) : (p.tools || '');
 
     var newRow = [
       timestamp,
       p.name || '',
       p.phone || '',
       p.email || '',
+      p.degree || '',
       p.experience || '',
-      p.current || '',
-      p.link || '',
-      p.doclink || '',
-      p.q3 || '',
-      p.q4 || '',
+      p.portfolio || '',
+      p.task_link || '',
+      p.current_role || '',
+      p.notice || '',
+      toolsSelected,
+      p.q_restraint || '',
+      p.q_volume || '',
+      p.current_ctc || '',
+      p.expected_ctc || '',
       p.utm_source || '',
       p.utm_campaign || '',
       p.utm_content || '',
@@ -92,7 +109,7 @@ function doGet(e) {
   return ContentService
     .createTextOutput(JSON.stringify({
       "status": "active",
-      "message": "Google Apps Script Web App for Estate Autopilots Growth Strategist lead collection is live."
+      "message": "Google Apps Script Web App for Estate Autopilots Graphic Designer lead collection is live."
     }))
     .setMimeType(ContentService.MimeType.JSON);
 }
