@@ -6,7 +6,7 @@
  * 1. Open your target Google Sheet for Copywriter applications.
  * 2. Click Extensions > Apps Script.
  * 3. Replace all code in Code.gs with this script.
- * 4. Click 'Deploy' > 'New deployment'.
+ * 4. Click 'Deploy' > 'New deployment' (or 'Manage deployments' > Edit > New Version).
  * 5. Select type: 'Web app'.
  * 6. Set Description: "Copywriter Lead Collector".
  * 7. Set 'Execute as': "Me".
@@ -31,12 +31,13 @@ function doPost(e) {
         "Timestamp",
         "Full Name",
         "WhatsApp / Phone",
-        "Email",
-        "City / Location",
+        "In Office (Kothrud)",
         "Languages",
-        "Experience",
+        "Current Role",
+        "Experience Backgrounds",
+        "Proof of Work / Link",
+        "Currently Reading",
         "Notice Period",
-        "Portfolio Link",
         "Role",
         "Stage",
         "UTM Source",
@@ -59,14 +60,15 @@ function doPost(e) {
       timestamp,
       p.name || '',
       p.phone || '',
-      p.email || '',
-      p.city || '',
+      p.in_office || '',
       p.languages || '',
+      p.current_role || '',
       p.experience || '',
+      p.proof_of_work || p.portfolio_link || '',
+      p.reading || '',
       p.notice_period || '',
-      p.portfolio_link || '',
       p.role || 'Copywriter',
-      p.stage || 'Step 1',
+      p.stage || 'Step 1 — Details',
       p.utm_source || '',
       p.utm_campaign || '',
       p.utm_content || '',
