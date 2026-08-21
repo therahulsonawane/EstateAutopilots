@@ -1,0 +1,166 @@
+# Implementation Plan: Comprehensive Google Ads API Integration
+
+Integrate the **Google Ads API** into **Enterprise Meta Leads CRM** (`Leads-CRM`). This integration connects your multi-tenant Node.js/Express backend, Prisma ORM (PostgreSQL), and React frontend with Google Ads to deliver:
+
+1. **OAuth 2.0 Account Connection**: Secure popup-based authorization with encrypted token storage (`refreshTokenEncrypted`).
+2. **Inbound Lead Form Webhook**: Direct capture of leads submitted through Google Search & YouTube Lead Form Extensions.
+3. **Offline Conversions Upload (OCI & EC4L)**: Automatic feedback loop sending pipeline stage updates (e.g. `Qualified`, `Proposal`, `Won`) back to Google Ads via `gclid` or SHA-256 hashed customer identifiers (`email`, `phone`) to power Smart Bidding.
+4. **Google Ads Analytics & ROI Dashboard**: Fetching campaign metrics (`cost_micros`, `clicks`, `impressions`, `conversions`) via Google Ads Query Language (GAQL) and calculating true Customer Acquisition Cost (CAC) and Return on Ad Spend (ROAS).
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Google Ads Developer Token Access**: Google Ads API requires a Developer Token from a Google Ads Manager Account (MCC). During development and testing, a **Test Access** token can be used with a Google Ads Test Customer ID. For live production deployment, apply for **Basic Access** (15,000 operations/day) in Google Ads API Center.
+
+> [!NOTE]
+> **Encryption Key**: Refresh tokens and developer tokens will be encrypted in PostgreSQL using the project's existing AES-256 `ENCRYPTION_KEY` via [utils/encryption.js](file:///b:/Leads-CRM/backend/utils/encryption.js).
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Global vs. Per-Organization Developer Token**: Should all workspace organizations share a single system-wide `GOOGLE_ADS_DEVELOPER_TOKEN` in `backend/.env`, or should agencies/organizations be allowed to input their own custom Developer Token in the CRM settings tab? *(Default recommendation: Support both—fallback to `.env` token if per-org token is not set).*
+
+---
+
+## Proposed Changes
+
+### Database Layer (Prisma ORM)
+
+#### [MODIFY] [schema.prisma](file:///b:/Leads-CRM/backend/prisma/schema.prisma)
+- Add `GoogleAdsIntegration` model:
+  ```prisma
+  model GoogleAdsIntegration {
+    id                    String    @id @default(cuid())
+    organizationId        String    @unique
+    organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+    customerId            String?   // 10-digit Google Ads Customer ID (without hyphens)
+    developerTokenEncrypted String? @db.Text
+    refreshTokenEncrypted String?   @db.Text
+    tokenExpiresAt        DateTime?
+
+    // Stage Mapping JSON: e.g. { "qualified": "conv_action_123", "won": "conv_action_999" }
+    conversionEventMapping Json?    @default("{}")
+    autoSyncConversions   Boolean   @default(true)
+    isConnected           Boolean   @default(false)
+    lastSyncedAt          DateTime?
+
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @updatedAt
+
+    @@index([organizationId])
+  }
+  ```
+- Add `GoogleAdsConversionQueue` model:
+  ```prisma
+  model GoogleAdsConversionQueue {
+    id             String   @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    leadId         String
+    lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+    eventName      String   // e.g. "QUALIFIED", "WON"
+    conversionActionId String?
+    gclid          String?
+    value          Float    @default(0)
+    status         String   @default("pending") // pending, sent, failed
+    retryCount     Int      @default(0)
+    errorMessage   String?  @db.Text
+
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+
+    @@index([organizationId])
+    @@index([status])
+    @@index([createdAt])
+  }
+  ```
+- Add `googleAdsIntegration` and `googleAdsConversionQueues` relations to `Organization` and `Lead` models.
+
+---
+
+### Backend Core Services & API Layer
+
+#### [NEW] [googleAdsService.js](file:///b:/Leads-CRM/backend/services/googleAdsService.js)
+- `getGoogleAdsConfig()`: Retrieves environment client credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ADS_REDIRECT_URI`).
+- `buildGoogleAdsAuthUrl(organizationId)`: Generates state token via `generateState()` and constructs Google OAuth 2.0 login URL with scope `https://www.googleapis.com/auth/adwords`.
+- `handleGoogleAdsCallback(code, state)`: Validates state token, exchanges code for access/refresh tokens, encrypts refresh token, and upserts `GoogleAdsIntegration`.
+- `uploadOfflineConversion({ organizationId, lead, conversionActionId, value })`:
+  - Uploads click conversion via Google Ads API (`google-ads-api` SDK or Google REST API).
+  - Uses `gclid` if available.
+  - Automatically falls back to **Enhanced Conversions for Leads (EC4L)** with SHA-256 hashed `email` and `phone` if `gclid` is missing.
+- `fetchCampaignPerformance(organizationId)`: Executes GAQL query to retrieve campaign spend (`cost_micros`), clicks, impressions, and conversions.
+- `getGoogleAdsConfigSummary(organizationId)`, `updateGoogleAdsConfig(organizationId, payload)`, `disconnectGoogleAds(organizationId)`.
+
+#### [NEW] [googleAdsRoutes.js](file:///b:/Leads-CRM/backend/routes/googleAdsRoutes.js)
+- `GET /api/google-ads/callback`: Public callback endpoint called by Google during OAuth popup flow. Uses `renderPopupResponse()` from `popupHelper.js`.
+- Protected Admin Routes:
+  - `GET /api/google-ads/auth-url`: Generates OAuth login URL.
+  - `GET /api/google-ads/config`: Returns integration status, Customer ID, and stage mapping.
+  - `POST /api/google-ads/config`: Saves Customer ID, Developer Token, and conversion stage mapping.
+  - `POST /api/google-ads/disconnect`: Disconnects Google Ads integration.
+  - `GET /api/google-ads/campaigns`: Returns live Google Ads campaign analytics.
+  - `POST /api/google-ads/test-conversion`: Triggers a test conversion event.
+
+#### [MODIFY] [server.js](file:///b:/Leads-CRM/backend/server.js)
+- Import `googleAdsRoutes` and register route:
+  ```javascript
+  const googleAdsRoutes = require('./routes/googleAdsRoutes');
+  app.use('/api/google-ads', googleAdsRoutes);
+  ```
+
+#### [MODIFY] [leadService.js](file:///b:/Leads-CRM/backend/services/leadService.js)
+- In `updateLeadStatus` and stage transition methods:
+  - Check if `GoogleAdsIntegration` is enabled and has a mapped conversion action for the new stage.
+  - Queue event in `GoogleAdsConversionQueue` and trigger async `uploadOfflineConversion`.
+
+#### [MODIFY] [webhookIntegrationService.js](file:///b:/Leads-CRM/backend/services/webhookIntegrationService.js)
+- Enhance payload normalizer to parse direct Google Ads Lead Form Extension JSON payloads (`google_key` validation, reading `user_column_data` array for `FULL_NAME`, `USER_EMAIL`, `USER_PHONE_NUMBER`, and `gclid`).
+
+---
+
+### Frontend UI Layer
+
+#### [NEW] [GoogleAdsTab.jsx](file:///b:/Leads-CRM/frontend/src/components/GoogleAdsTab.jsx)
+- Integration Status Header (Connected / Disconnected badge, Connected At timestamp).
+- Connect via OAuth button (opens popup window listening for `google-ads-connect-complete` postMessage).
+- Customer ID & Developer Token configuration card.
+- Stage-to-Conversion Action Mapping Table (allows mapping CRM lead pipeline statuses like `new`, `qualified`, `proposal`, `won` to Google Ads Conversion Action IDs).
+- Test Conversion Trigger button & execution log.
+
+#### [MODIFY] [SettingsPage.jsx](file:///b:/Leads-CRM/frontend/src/pages/SettingsPage.jsx)
+- Add "Google Ads" tab to the Settings navigation sidebar/tabs next to Meta Ads, WhatsApp, and Google Sheets.
+- Render `GoogleAdsTab` when selected.
+
+#### [MODIFY] [DashboardPage.jsx](file:///b:/Leads-CRM/frontend/src/pages/DashboardPage.jsx) & [ReportsPage.jsx](file:///b:/Leads-CRM/frontend/src/pages/ReportsPage.jsx)
+- Add Google Ads performance card displaying Ad Spend, Clicks, Impressions, Cost Per Lead (CPL), and ROAS alongside Meta Ads metrics.
+
+---
+
+## Verification Plan
+
+### Automated Tests & Server Diagnostics
+1. **Prisma Schema Generation**:
+   - Run `npx prisma generate` in `backend`.
+   - Run `npx prisma migrate dev --name add_google_ads_integration` in `backend`.
+2. **Backend Code Diagnostics & Linting**:
+   - Execute backend syntax and startup verification.
+
+### Manual Verification Steps
+1. **OAuth Connection Flow**:
+   - Open Settings > Google Ads tab in frontend.
+   - Click "Connect Google Ads Account".
+   - Confirm popup opens Google login screen, authorizes access, redirects to `/api/google-ads/callback`, closes popup, and updates status badge to "Connected".
+2. **Offline Conversion Trigger**:
+   - Change a lead's stage to `Qualified` or `Won` in Kanban/Lead Details.
+   - Inspect backend logs and verify conversion payload upload with `gclid` or SHA-256 hashed email/phone.
+3. **Google Lead Form Webhook**:
+   - Send simulated POST request to webhook endpoint with `user_column_data` payload.
+   - Verify lead creation in Lead Table with correctly assigned source and `gclid`.
+4. **Dashboard Campaign Analytics**:
+   - Open Dashboard / Reports page and verify Google Ads metrics card populates correctly.
