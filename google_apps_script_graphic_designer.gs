@@ -1,7 +1,7 @@
 /**
  * GOOGLE APPS SCRIPT — GRAPHIC DESIGNER HIRING (index.html)
  * 
- * Instructions:
+ * Setup Instructions:
  * 1. Open Google Sheets (https://sheets.new) for Graphic Designer Leads.
  * 2. Click Extensions > Apps Script.
  * 3. Replace all existing code in Code.gs with this script and save.
@@ -10,14 +10,14 @@
  * 6. Set:
  *    - Description: "Graphic Designer Leads Webhook"
  *    - Execute as: "Me"
- *    - Who has access: "Anyone"
+ *    - Who has access: "Anyone"  <-- MUST be "Anyone"
  * 7. Click Deploy, Authorize access, and copy the Web App URL.
  * 8. In index.html, replace the form action with your Web App URL.
  */
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  lock.tryLock(15000);
 
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -37,19 +37,23 @@ function doPost(e) {
         "Tools Used",
         "Current Role & Company",
         "Notice Period",
-        "Current CTC",
-        "Expected CTC",
+        "Current Salary",
+        "Expected Salary",
         "UTM Source",
         "UTM Campaign",
         "UTM Content",
+        "Ad ID",
         "Role"
       ];
       sheet.appendRow(headers);
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#021F2D").setFontColor("#FBC701");
+      sheet.getRange(1, 1, 1, headers.length)
+        .setFontWeight("bold")
+        .setBackground("#021F2D")
+        .setFontColor("#FBC701");
       sheet.setFrozenRows(1);
     }
 
-    var data = e.parameter;
+    var data = parseRequestData(e);
     var timestamp = new Date();
 
     sheet.appendRow([
@@ -62,13 +66,14 @@ function doPost(e) {
       data.degree || "",
       data.college || "",
       data.tools || "",
-      data.current_role || "",
-      data.notice || "",
+      data.current_role || data.current || "",
+      data.notice || data.notice_period || "",
       data.current_ctc || "",
       data.expected_ctc || "",
       data.utm_source || "",
       data.utm_campaign || "",
       data.utm_content || "",
+      data.ad_id || "",
       data.role || "Graphic Designer — Estate Autopilots"
     ]);
 
@@ -87,6 +92,45 @@ function doPost(e) {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({ status: "Graphic Designer Lead Webhook is active" }))
+    .createTextOutput(JSON.stringify({
+      status: "active",
+      message: "Graphic Designer Lead Webhook is active"
+    }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function parseRequestData(e) {
+  var data = {};
+  if (!e) return data;
+
+  if (e.parameter && Object.keys(e.parameter).length > 0) {
+    for (var key in e.parameter) {
+      data[key] = e.parameter[key];
+    }
+  }
+
+  if (e.postData && e.postData.contents) {
+    var raw = e.postData.contents;
+    try {
+      var json = JSON.parse(raw);
+      for (var k in json) {
+        data[k] = json[k];
+      }
+      return data;
+    } catch (err) {}
+
+    if (typeof raw === "string" && raw.indexOf("=") !== -1) {
+      var pairs = raw.split("&");
+      for (var i = 0; i < pairs.length; i++) {
+        var p = pairs[i].split("=");
+        if (p.length === 2) {
+          var paramKey = decodeURIComponent(p[0].replace(/\+/g, " "));
+          var paramVal = decodeURIComponent(p[1].replace(/\+/g, " "));
+          data[paramKey] = paramVal;
+        }
+      }
+    }
+  }
+
+  return data;
 }

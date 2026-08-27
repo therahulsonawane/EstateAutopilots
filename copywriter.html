@@ -504,7 +504,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
     </p>
 
     <!-- FORM_ENDPOINT: Google Apps Script / Lead Collector -->
-    <form id="step1Form" action="https://script.google.com/macros/s/AKfycbxZWI6WcvkgISeWTPfYNe1BkYQS6Q-oVfneaIljsN8FHPra7ZV1fv5w6gZOReWXEKh1/exec" method="POST">
+    <form id="step1Form" action="https://script.google.com/macros/s/AKfycbym2eJEnqbz4ZgrJCV2Z97B5qyASRRJAHD9toSFNI4QgWJeg84g0ZZxIWpFn25q2kw_/exec" method="POST">
 
       <div class="grid2">
         <div class="field">
@@ -687,11 +687,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
     // Send asynchronously to Google Apps Script / Form endpoint
     try {
       if (form.action && form.action.indexOf('http') === 0) {
-        await fetch(form.action, {
+        var fetchPromise = fetch(form.action, {
           method: 'POST',
           body: params,
           mode: 'no-cors'
         });
+        var timeoutPromise = new Promise(function(resolve) { setTimeout(resolve, 2500); });
+        await Promise.race([fetchPromise, timeoutPromise]);
       }
     } catch (fetchErr) {
       console.warn('Submission network notice:', fetchErr);

@@ -538,17 +538,33 @@ document.getElementById('applyForm').addEventListener('submit', function(e){
   e.preventDefault();
   var form = this;
   var btn  = form.querySelector('button[type=submit]');
+  btn.disabled = true;
   btn.textContent = 'Sending…';
 
   var name = (form.querySelector('[name=name]').value || '').trim();
   try { sessionStorage.setItem('ea_applicant', name); } catch(err){}
   if (window.fbq) fbq('track','Lead');
 
+  var redirected = false;
   var go = function(){
-    window.location.href = 'task-graphic-designer.html?name=' + encodeURIComponent(name);
+    if (!redirected) {
+      redirected = true;
+      window.location.href = 'task-graphic-designer.html?name=' + encodeURIComponent(name);
+    }
   };
 
-  fetch(form.action, { method:'POST', body:new FormData(form), mode:'no-cors' })
+  // Consolidate tools checkboxes into comma-separated list
+  var selectedTools = Array.from(form.querySelectorAll('input[name="tools"]:checked')).map(function(cb){ return cb.value; });
+
+  var fd = new FormData(form);
+  var params = new URLSearchParams();
+  for (var pair of fd.entries()) {
+    if (pair[0] === 'tools') continue;
+    params.append(pair[0], pair[1]);
+  }
+  params.set('tools', selectedTools.join(', '));
+
+  fetch(form.action, { method:'POST', body:params, mode:'no-cors' })
     .then(go).catch(go);
 
   // never strand the applicant if the endpoint is slow
