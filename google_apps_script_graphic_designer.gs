@@ -1,104 +1,84 @@
 /**
- * Estate Autopilots — Graphic Designer Lead Automation
- * Google Apps Script for capturing Graphic Designer applications into a dedicated Google Sheet
+ * GOOGLE APPS SCRIPT — GRAPHIC DESIGNER HIRING (index.html)
  * 
  * Instructions:
- * 1. Open your dedicated Google Sheet for Graphic Designer applications.
+ * 1. Open Google Sheets (https://sheets.new) for Graphic Designer Leads.
  * 2. Click Extensions > Apps Script.
- * 3. Replace all code in Code.gs with this script.
+ * 3. Replace all existing code in Code.gs with this script and save.
  * 4. Click 'Deploy' > 'New deployment'.
- * 5. Select type: 'Web app'.
- * 6. Set Description: "Graphic Designer Lead Collector".
- * 7. Set 'Execute as': "Me".
- * 8. Set 'Who has access': "Anyone".
- * 9. Click 'Deploy', authorize permissions, and copy the Web App URL.
- * 10. Paste the Web App URL into FORM_ENDPOINT in graphic-designer.html (around line 821).
+ * 5. Select Type: 'Web app'.
+ * 6. Set:
+ *    - Description: "Graphic Designer Leads Webhook"
+ *    - Execute as: "Me"
+ *    - Who has access: "Anyone"
+ * 7. Click Deploy, Authorize access, and copy the Web App URL.
+ * 8. In index.html, replace the form action with your Web App URL.
  */
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  // Wait up to 10 seconds for other instances to finish
   lock.tryLock(10000);
 
   try {
-    var doc = SpreadsheetApp.getActiveSpreadsheet();
-    // Uses the 'Graphic Designer' tab if it exists, otherwise writes to the active first tab
-    var sheet = doc.getSheetByName("Graphic Designer") || doc.getActiveSheet();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getActiveSheet();
 
-    // Check if header row exists, create if empty
-    var lastRow = sheet.getLastRow();
-    var lastCol = sheet.getLastColumn();
-
-    if (lastRow === 0 || lastCol === 0) {
+    // Auto setup headers if sheet is blank
+    if (sheet.getLastRow() === 0) {
       var headers = [
         "Timestamp",
         "Full Name",
         "WhatsApp Number",
         "Email",
-        "Design Qualification",
-        "Years Experience",
+        "Experience",
         "Portfolio Link",
-        "Task Submission Link",
+        "Degree",
+        "College / Institute",
+        "Tools Used",
         "Current Role & Company",
         "Notice Period",
-        "Daily Tools",
-        "Q1 - Design Restraint",
-        "Q2 - Weekly Creatives Volume",
-        "Current Salary (Monthly)",
-        "Expected Salary (Monthly)",
+        "Current CTC",
+        "Expected CTC",
         "UTM Source",
         "UTM Campaign",
         "UTM Content",
-        "Ad ID",
-        "Page URL"
+        "Role"
       ];
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      sheet.getRange(1, 1, 1, headers.length)
-        .setFontWeight("bold")
-        .setBackground("#021f2d")
-        .setFontColor("#fbc701");
+      sheet.appendRow(headers);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#021F2D").setFontColor("#FBC701");
       sheet.setFrozenRows(1);
     }
 
-    var p = (e && e.parameter) ? e.parameter : {};
-    var params = (e && e.parameters) ? e.parameters : {};
-    var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+05:30", "yyyy-MM-dd HH:mm:ss");
+    var data = e.parameter;
+    var timestamp = new Date();
 
-    // Handle multiple tool selections if checkboxes are passed
-    var toolsSelected = params.tools ? (Array.isArray(params.tools) ? params.tools.join(', ') : params.tools) : (p.tools || '');
-
-    var newRow = [
+    sheet.appendRow([
       timestamp,
-      p.name || '',
-      p.phone || '',
-      p.email || '',
-      p.degree || '',
-      p.experience || '',
-      p.portfolio || '',
-      p.task_link || '',
-      p.current_role || '',
-      p.notice || '',
-      toolsSelected,
-      p.q_restraint || '',
-      p.q_volume || '',
-      p.current_ctc || '',
-      p.expected_ctc || '',
-      p.utm_source || '',
-      p.utm_campaign || '',
-      p.utm_content || '',
-      p.ad_id || '',
-      p.page_url || ''
-    ];
-
-    sheet.appendRow(newRow);
+      data.name || "",
+      data.phone || "",
+      data.email || "",
+      data.experience || "",
+      data.portfolio || "",
+      data.degree || "",
+      data.college || "",
+      data.tools || "",
+      data.current_role || "",
+      data.notice || "",
+      data.current_ctc || "",
+      data.expected_ctc || "",
+      data.utm_source || "",
+      data.utm_campaign || "",
+      data.utm_content || "",
+      data.role || "Graphic Designer — Estate Autopilots"
+    ]);
 
     return ContentService
-      .createTextOutput(JSON.stringify({ "result": "success", "row": sheet.getLastRow() }))
+      .createTextOutput(JSON.stringify({ result: "success", status: 200 }))
       .setMimeType(ContentService.MimeType.JSON);
 
-  } catch (err) {
+  } catch (error) {
     return ContentService
-      .createTextOutput(JSON.stringify({ "result": "error", "error": err.toString() }))
+      .createTextOutput(JSON.stringify({ result: "error", error: error.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
@@ -107,9 +87,6 @@ function doPost(e) {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({
-      "status": "active",
-      "message": "Google Apps Script Web App for Estate Autopilots Graphic Designer lead collection is live."
-    }))
+    .createTextOutput(JSON.stringify({ status: "Graphic Designer Lead Webhook is active" }))
     .setMimeType(ContentService.MimeType.JSON);
 }

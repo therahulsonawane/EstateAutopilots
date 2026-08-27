@@ -1,87 +1,98 @@
 /**
- * Estate Autopilots — Growth Strategist Lead Automation
- * Google Apps Script for capturing form submissions into Google Sheets
+ * Google Apps Script for Estate Autopilots Recruitment Leads
+ * Handles both Graphic Designer and Copywriter form submissions.
  * 
  * Instructions:
- * 1. Open your target Google Sheet for Growth Strategist.
- * 2. Click Extensions > Apps Script.
- * 3. Replace all code in Code.gs with this script.
- * 4. Click 'Deploy' > 'New deployment'.
- * 5. Select type: 'Web app'.
- * 6. Set Description: "Growth Strategist Lead Collector".
- * 7. Set 'Execute as': "Me".
- * 8. Set 'Who has access': "Anyone".
- * 9. Click 'Deploy', authorize permissions, and copy the Web App URL.
- * 10. Paste the Web App URL into FORM_ENDPOINT in growth-strategist.html.
+ * 1. Open Google Sheets (https://sheets.new)
+ * 2. Click Extensions > Apps Script
+ * 3. Delete any default code in Code.gs, paste this entire script, and save.
+ * 4. Click 'Deploy' > 'New deployment'
+ * 5. Select type: 'Web app'
+ * 6. Set:
+ *    - Description: "Estate Autopilots Leads Webhook"
+ *    - Execute as: "Me"
+ *    - Who has access: "Anyone"
+ * 7. Click Deploy, Authorize access, and COPY the Web App URL.
+ * 8. Replace YOUR_FORM_ENDPOINT in index.html and copywriter.html with this Web App URL.
  */
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  // Wait up to 10 seconds for other instances to finish
   lock.tryLock(10000);
 
   try {
-    var doc = SpreadsheetApp.getActiveSpreadsheet();
-    // Target the 'Growth Strategist' tab if present, fallback to active sheet
-    var sheet = doc.getSheetByName("Growth Strategist") || doc.getActiveSheet();
-
-    // Check if header row exists
-    var lastRow = sheet.getLastRow();
-    var lastCol = sheet.getLastColumn();
-
-    if (lastRow === 0 || lastCol === 0) {
-      var headers = [
-        "Timestamp",
-        "Full Name",
-        "Phone / WhatsApp",
-        "Email",
-        "Years Experience",
-        "Current Role & Company",
-        "Portfolio / CV Link",
-        "Task Doc Link",
-        "Q3 - Senior Feedback Response",
-        "Q4 - Anything Else",
-        "UTM Source",
-        "UTM Campaign",
-        "UTM Content",
-        "Ad ID",
-        "Page URL"
-      ];
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#021f2d").setFontColor("#fbc701");
-      sheet.setFrozenRows(1);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var data = e.parameter;
+    var role = data.role || data.job_role || "General Lead";
+    
+    // Determine target sheet tab based on role
+    var sheetName = "All Leads";
+    if (role.toLowerCase().indexOf("graphic") !== -1) {
+      sheetName = "Graphic Designer";
+    } else if (role.toLowerCase().indexOf("copywriter") !== -1) {
+      sheetName = "Copywriter";
     }
 
-    var p = (e && e.parameter) ? e.parameter : {};
-    var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+05:30", "yyyy-MM-dd HH:mm:ss");
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      setupHeaders(sheet, sheetName);
+    } else if (sheet.getLastRow() === 0) {
+      setupHeaders(sheet, sheetName);
+    }
 
-    var newRow = [
-      timestamp,
-      p.name || '',
-      p.phone || '',
-      p.email || '',
-      p.experience || '',
-      p.current || '',
-      p.link || '',
-      p.doclink || '',
-      p.q3 || '',
-      p.q4 || '',
-      p.utm_source || '',
-      p.utm_campaign || '',
-      p.utm_content || '',
-      p.ad_id || '',
-      p.page_url || ''
-    ];
+    var timestamp = new Date();
 
-    sheet.appendRow(newRow);
+    if (sheetName === "Graphic Designer") {
+      sheet.appendRow([
+        timestamp,
+        data.name || "",
+        data.phone || "",
+        data.email || "",
+        data.experience || "",
+        data.portfolio || "",
+        data.degree || "",
+        data.college || "",
+        data.tools || "",
+        data.current_role || "",
+        data.notice || "",
+        data.current_ctc || "",
+        data.expected_ctc || "",
+        data.utm_source || "",
+        data.utm_campaign || "",
+        data.utm_content || "",
+        role
+      ]);
+    } else if (sheetName === "Copywriter") {
+      sheet.appendRow([
+        timestamp,
+        data.name || "",
+        data.phone || "",
+        data.email || "",
+        data.portfolio || "",
+        data.background || data.experience || "",
+        data.reading || "",
+        data.marathi || "",
+        data.hindi || "",
+        data.english || "",
+        data.writing_sample || data.notes || "",
+        data.utm_source || "",
+        data.utm_campaign || "",
+        data.utm_content || "",
+        role
+      ]);
+    } else {
+      // Fallback: append all parameters as JSON string
+      sheet.appendRow([timestamp, JSON.stringify(data), role]);
+    }
 
     return ContentService
-      .createTextOutput(JSON.stringify({ "result": "success", "row": sheet.getLastRow() }))
+      .createTextOutput(JSON.stringify({ result: "success", status: 200 }))
       .setMimeType(ContentService.MimeType.JSON);
 
-  } catch (err) {
+  } catch (error) {
     return ContentService
-      .createTextOutput(JSON.stringify({ "result": "error", "error": err.toString() }))
+      .createTextOutput(JSON.stringify({ result: "error", error: error.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
@@ -90,9 +101,55 @@ function doPost(e) {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({
-      "status": "active",
-      "message": "Google Apps Script Web App for Estate Autopilots Growth Strategist lead collection is live."
-    }))
+    .createTextOutput(JSON.stringify({ status: "Estate Autopilots Lead Webhook is active" }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function setupHeaders(sheet, type) {
+  var headers = [];
+  if (type === "Graphic Designer") {
+    headers = [
+      "Timestamp",
+      "Full Name",
+      "WhatsApp Number",
+      "Email",
+      "Experience",
+      "Portfolio Link",
+      "Degree",
+      "College / Institute",
+      "Tools Used",
+      "Current Role & Company",
+      "Notice Period",
+      "Current CTC",
+      "Expected CTC",
+      "UTM Source",
+      "UTM Campaign",
+      "UTM Content",
+      "Role"
+    ];
+  } else if (type === "Copywriter") {
+    headers = [
+      "Timestamp",
+      "Full Name",
+      "WhatsApp Number",
+      "Email",
+      "Portfolio / Sample Link",
+      "Research & Writing Background",
+      "Recent Reads",
+      "Marathi Proficiency",
+      "Hindi Proficiency",
+      "English Proficiency",
+      "Writing Sample / Notes",
+      "UTM Source",
+      "UTM Campaign",
+      "UTM Content",
+      "Role"
+    ];
+  } else {
+    headers = ["Timestamp", "Data", "Role"];
+  }
+
+  sheet.appendRow(headers);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#021F2D").setFontColor("#FBC701");
+  sheet.setFrozenRows(1);
 }
