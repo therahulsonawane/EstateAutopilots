@@ -1,6 +1,8 @@
 # Netlify Redirects & Pretty URLs
-/growth-strategist            /growth-strategist.html            200
-/growth-strategist/           /growth-strategist.html            200
+/growth-strategist            /growth-strategist/index.html      200
+/growth-strategist/           /growth-strategist/index.html      200
+/growth-strategist/challenge  /growth-strategist/challenge.html  200
+/growth-strategist/challenge/ /growth-strategist/challenge.html  200
 /growth-strategist-thank-you  /growth-strategist-thank-you.html   200
 /growth-strategist-thank-you/ /growth-strategist-thank-you.html   200
 
